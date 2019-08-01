@@ -215,7 +215,7 @@ def find_crescent_set(norm, crescent_size, grid_size ):
     next_to_add = (0,0)
     while next_to_add:
         count += 1
-        if count % 10000 == 0:
+        if count % 100000 == 0:
             print(time.time() - start,current_set)
         current_set.append(next_to_add)
         # print(current_set)
@@ -369,8 +369,8 @@ def l1_forbidden_circle_points(p1, p2, p3, grid_size):
     # If p3 in each circle, then forbid those points.
     forbidden_points = set()
     for circle in bad_circles:
-        doubled_circle_points = ball_points(1, circle[0], circle[1], grid_size*2 )
-        if d3 in doubled_circle_points:
+        if dist(1, d3, circle[0]) == circle[1]:
+            doubled_circle_points = ball_points(1, circle[0], circle[1], grid_size*2 )
             for p in doubled_circle_points:
                 if l1_is_double_point(p):
                     forbidden_points.add(l1_halve_point(p))
