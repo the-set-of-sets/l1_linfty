@@ -1,6 +1,6 @@
 # l1_infty.py
 # Sara Fish
-# Jul 31 2019
+# Jul 31 2019 - Aug 15 2019
 
 # Description: This code finds crescent configurations in L1 and Linfty.
 # Algorithm: backtracking.
@@ -9,42 +9,55 @@
 # 4 <= n <= 7. This is reasonable because we conjecture that they do not exist
 # in Linfty for n >= 9 and in L1 for n >= 8.
 
+# Standard libraries
+#############################################
 import sys
 import math
 import itertools
 import time
 
+# Other files used:
+#############################################
+# simple_methods contains helper functions which don't depend on norm
+import simple_methods
+# L1_methods contains l1 specific methods
+import l1_methods
+# Linfty_methods contains linfty specific methods
+import linfty_methods
+
 #####################################################
 #####################################################
-######      Methods used in both L1 and Linfty ######
+######      Splitter functions ######################
 #####################################################
 #####################################################
 
-def print_mathematica(points):
-    """Prints the set of points in a Mathematica-friendly way.
-    (Writing the point (1,2) as {1,2} instead.)
-    Input: <points>, set or list of points
-    Output: void (prints)"""
-    points = list(points)
-    for p in points[:-1]:
-        print("{"+str(p[0]) + "," + str(p[1]) + "}",end="")
-        print(",",end=" ")
-    print("{"+str(points[-1][0]) + "," + str(points[-1][1]) + "}")
+def forbidden_circle_points(norm, p1, p2, p3, grid_size):
+    if norm == 1:
+        return l1_methods.l1_forbidden_circle_points(p1, p2, p3, grid_size)
+    elif norm == 0:
+        return linfty_methods.linfty_forbidden_circle_points(p1, p2, p3, grid_size)
+    else:
+        return set()
 
-def is_line(p1, p2, p3):
-    """Determines whether p1, p2, p3 lie on a line.
-    Input: <p1>, <p2>, <p3> points
-    Output: True if they lie on a line, False otherwise"""
-    return abs(p1[0] - p2[0]) * abs( p2[1] - p3[1] ) == abs(p1[1] - p2[1] ) * abs( p2[0] - p3[0] )
+def ball_points(norm, center, radius, grid_size):
+    if norm == 1:
+        return l1_methods.l1_ball_points(center, radius, grid_size)
+    elif norm == 0:
+        return linfty_methods.linfty_ball_points(center, radius, grid_size)
+    else:
+        return set()
 
-def in_grid(p, grid_size):
-    """Determines whether point <p> is in the grid with size <grid_size>
-    Note: grid_size = 2 means a grid with 9 points: (0,0) through (2,2).
-    Input: <p> point, <grid_size>
-    Output: True if <p> in grid, False otherwise"""
-    if not p:# if p is None
-        return False
-    return (0 <= p[0]) and (0 <= p[1]) and (p[0] <= grid_size) and (p[1] <= grid_size)
+def dist(norm, a, b):
+    if norm == 1:
+        return l1_methods.l1_dist(a,b)
+    elif norm == 0:
+        return linfty_methods.linfty_dist(a,b)
+
+#####################################################
+#####################################################
+######      Methods depending on norm  ##############
+#####################################################
+#####################################################
 
 def distance_set(norm, points):
     """Computes the distance set of a set of points <points>.
@@ -70,43 +83,6 @@ def has_crescent_dist(norm, points):
     n = len(points)
     distances = distance_set(norm, points)
     return set(distances.values()) == set(range(1,n))
-
-def increment_point( point, grid_size ):
-    """Returns <point> incremented lexicographically in grid <grid_size>
-    Input: <point> point
-           <grid_size>
-    Output: point (incremented), or None if cannot be incremented"""
-    if not in_grid(point, grid_size):
-        return None
-    if point[1] == grid_size:
-        if point[0] == grid_size:
-            return None
-        else:
-            return ( point[0] + 1, 0)
-    else:
-        return ( point[0], point[1] + 1)
-
-def forbidden_line_points(p1, p2, grid_size):
-    """Returns all points that lie on the line determined by <p1>, <p2> and
-    in <grid_size>.
-    Input: <p1>, <p2> points
-    Output: a set of points"""
-    if p1 == p2: # This shouldn't happen
-        raise ValueError
-    mult = math.gcd( p1[0] - p2[0], p1[1] - p2[1] )
-    # step is "step" of line
-    step = (  int ( (p1[0] - p2[0])/mult ), int( (p1[1] - p2[1])/mult ) )
-    if step[0] < 0:
-        step = ( - step[0], - step[1] )
-    # Find leftmost point on line
-    left_pt = p1
-    while in_grid( ( left_pt[0] - step[0], left_pt[1] - step[1] ) , grid_size):
-        left_pt = ( left_pt[0] - step[0], left_pt[1] - step[1] )
-    # Create list of points on line
-    line_pts = [ left_pt ]
-    while in_grid( ( line_pts[-1][0] + step[0], line_pts[-1][1] + step[1] ), grid_size ):
-        line_pts.append( ( line_pts[-1][0] + step[0], line_pts[-1][1] + step[1] ) )
-    return set( line_pts )
 
 def forbidden_linelike_points(norm, p1, p2, p3, grid_size):
     """Returns set of points p in the grid <grid_size> which are forbidden
@@ -150,7 +126,7 @@ def is_general(norm, points, printFail = False):
         grid_size = max( grid_size, p[0], p[1] )
     # Check no 3 points on a line.
     for p,q in itertools.combinations(points, 2):
-        bad_line_pts = forbidden_line_points(p,q,grid_size)
+        bad_line_pts = simple_methods.forbidden_line_points(p,q,grid_size)
         if len( bad_line_pts.intersection(points) ) >= 3:
             if printFail:
                 print("Line found: ",p,q,bad_line_pts.intersection(points))
@@ -171,6 +147,65 @@ def is_general(norm, points, printFail = False):
     # Otherwise, is in general position.
     return True
 
+# def is_general_fast(points, sto_forbidden_line_points,
+#             sto_forbidden_circle_points, sto_is_line_like, printFail = False):
+#     """ Determines whether a set of points is in general position.
+#     WARNING: (these lists) have to be precomputed
+#     WARNING: assumes points[:-1] is in general position, only checks last pt
+#     Input: <points>, list of points
+#            <sto_forbidden_line_points>, dict, key (a1,a2,b1,b2), value
+#                                         set of points which lie on line with a,b
+#            <sto_forbidden_circle_points>, dict, key (a1,a2,b1,b2,c1,c2), value
+#                                         set of point on circle with a,b,c
+#            <sto_is_line_like>, set, set of all (a1,a2,b1,b2,c1,c2,d1,d2) which
+#                                     are line-like
+#            <printFail>: print the reason it's not in general position, if it
+#                         isn't. (e.g. line, circle, linelike)
+#     Output: True/False (and printing if <printFail> is True)
+#     """
+#     # No 3 points on a line
+#     for p,q,r in itertools.combinations(points, 3):
+#         if r in sto_forbidden_line_points[p + q]:
+#             if printFail:
+#                 print("Line found: ", p, q, r)
+#             return False
+#     # No 4 points on circle
+#     for p,q,r,s in itertools.combinations(points, 4):
+#         if s in sto_forbidden_circle_points[p + q + r]:
+#             if printFail:
+#                 print("Circle found: ", p, q, r, s)
+#             return False
+#     # No 4 points in line-like
+#     for p,q,r,s in itertools.combinations(points, 4):
+#         if p+q+r+s in sto_is_line_like:
+#             if printFail:
+#                 print("Line-like found: ",p, q, r, s)
+#             return False
+#     return True
+#     # last = points[-1]
+#     # # Check no 3 points on a line.
+#     # for p,q in itertools.combinations(points, 2):
+#     #     bad_line_pts = sto_forbidden_line_points[p + q]
+#     #     if last in bad_line_pts and last != p and last != q:
+#     #         if printFail:
+#     #             print("Line found: ",p,q,last)
+#     #         return False
+#     # # Check no 4 points on a circle.
+#     # for p,q,r in itertools.combinations(points, 3):
+#     #     bad_circle_pts = sto_forbidden_circle_points[p + q + r]
+#     #     if last in bad_circle_pts and last != p and last != q and last != r:
+#     #         if printFail:
+#     #             print("Circle found: ",p,q,r,last)
+#     #         return False
+#     # # Check if has a line like configuration of size 4.
+#     # for p,q,r in itertools.combinations(points, 3):
+#     #     if p+q+r+last in sto_is_line_like:
+#     #         if printFail:
+#     #             print("Has line-like:",p,q,r,last)
+#     #         return False
+#     # Otherwise, is in general position.
+#     return True
+
 
 def is_crescent(norm, points, printFail = False):
     """ Determines whether a set of points is crescent.
@@ -186,29 +221,47 @@ def is_crescent(norm, points, printFail = False):
         return False
     return True
 
+def is_line_like(norm, p1, p2, p3, p4):
+    """ Determines whether p1, p2, p3, p4 form a line-like configuration.
+    Input:  <norm>, 1 if L1, 0 if Linfty
+            <p1>, <p2>, <p3>, <p4>, points
+    Output: True/False, whether it is line-like
+            (Actually returns line-like config if true)"""
+    pts = [p1, p2, p3, p4]
+    if has_crescent_dist(norm, pts):
+        for perm in itertools.permutations(range(4)):
+            if (dist(norm, pts[perm[0]], pts[perm[1]]) == dist(norm, pts[perm[1]], pts[perm[2]])
+                and dist(norm, pts[perm[1]], pts[perm[2]]) == dist(norm, pts[perm[2]], pts[perm[3]])
+                and dist(norm, pts[perm[0]], pts[perm[2]]) == dist(norm, pts[perm[1]], pts[perm[3]]) ):
+                return [pts[perm[i]] for i in range(4)]
 
 
 def has_line_like(norm, points):
     """ Determines whether a set of points contains a line-like config of size 4
     Input: <points>, a set of points
-    Output: True / False """
+    Output: True / False (actually returns line-like config if true)"""
     for pts in itertools.combinations(points, 4):
-        if has_crescent_dist(norm, pts):
-            for perm in itertools.permutations(range(4)):
-                if (dist(norm, pts[perm[0]], pts[perm[1]]) == dist(norm, pts[perm[1]], pts[perm[2]])
-                    and dist(norm, pts[perm[1]], pts[perm[2]]) == dist(norm, pts[perm[2]], pts[perm[3]])
-                    and dist(norm, pts[perm[0]], pts[perm[2]]) == dist(norm, pts[perm[1]], pts[perm[3]]) ):
-                    return [pts[perm[i]] for i in range(4)]
+        a = is_line_like(norm, pts[0], pts[1], pts[2], pts[3] )
+        if a:
+            return a
     return False
 
 
-def find_crescent_set(norm, crescent_size, grid_size ):
+def find_crescent_set(norm, crescent_size, grid_size, sto_values):
     """ Finds a crescent set of size <crescent_size> in <grid_size>.
     Input: <norm>, 1 if L1, 0 if Linfty
            <crescent_size>, size of crescent set.
            <grid_size>, size of grid.
+           <sto_values>, list with three items, which contain
+                <sto_forbidden_line_points>, dict, key (a1,a2,b1,b2), value
+                                    set of points which lie on line with a,b
+                <sto_forbidden_circle_points>, dict, key (a1,a2,b1,b2,c1,c2),
+                                    value set of point on circle with a,b,c
+                <sto_is_line_like>, set, set of all (a1,a2,b1,b2,c1,c2,d1,d2)
+                                    which are line-like
     Output: Set of points (crescent set), or None if none exists.
     """
+    # sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like = sto_values
     count = 0
     start = time.time()
     current_set = []
@@ -218,9 +271,23 @@ def find_crescent_set(norm, crescent_size, grid_size ):
         if count % 100000 == 0:
             print(time.time() - start,current_set)
         current_set.append(next_to_add)
-        # print(current_set)
         needs_pop = False # whether last element needs to be popped
+
+        # #TODO
+        # aa = is_general(norm, current_set,False)
+        # bb = is_general_fast(current_set, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like,False)
+        # if aa != bb:
+        #     print(current_set)
+        #     print("good",aa)
+        #     is_general(norm, current_set,True)
+        #     print("fast",bb)
+        #     is_general_fast(current_set, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like,True)
+        #     print()
+
+
+
         if not is_general(norm, current_set):
+        #if not is_general_fast(current_set, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like):
             needs_pop = True
         elif len( distance_set(norm, current_set) ) >= crescent_size:
             needs_pop = True
@@ -234,7 +301,7 @@ def find_crescent_set(norm, crescent_size, grid_size ):
         # Add next.
         have_added = False
         while not have_added and next_to_add:
-            next_next_to_add = increment_point(next_to_add, grid_size)
+            next_next_to_add = simple_methods.increment_point(next_to_add, grid_size)
             if next_next_to_add:
                 next_to_add = next_next_to_add
                 have_added = True
@@ -245,398 +312,71 @@ def find_crescent_set(norm, crescent_size, grid_size ):
     print("No crescent set, try a bigger grid_size.")
     return None
 
-
 #####################################################
 #####################################################
-######      Methods used in L1  #####################
+######      Sto init function  ######################
 #####################################################
 #####################################################
 
-
-def l1_dist(p1, p2):
-    """Computes L1 distance between <p1> and <p2>.
-    Input: <p1>, <p2> points
-    Output: integer distance"""
-    return abs(p1[0] - p2[0]) + abs(p1[1] - p2[1] )
-
-def l1_is_slope_plus1(p1, p2):
-    """Determines whether <p1> and <p2> lie on a line of slope +1.
-    Input: <p1>, <p2> points
-    Output: True / False """
-    return p2[1] - p1[1] == p2[0] - p1[0]
-
-def l1_is_slope_minus1(p1, p2):
-    """Determines whether <p1> and <p2> lie on a line of slope -1.
-    Input: <p1>, <p2> points
-    Output: True / False"""
-    return p2[1] - p1[1] == p1[0] - p2[0]
-
-def l1_double_point(p):
-    """Returns <p> with doubled coordinates.
-    Example: (1,1) becomes (2,2). This is used for technical reasons so we don't
-    have to deal with half-integer coordinates.
-    Input: <p> point
-    Output: <p> point (doubled)"""
-    return (p[0] * 2, p[1] * 2)
-
-def l1_is_double_point(p):
-    """Returns whether <p> is a doubled point.
-    Input: <p> point
-    Output: True / False (True if is point with doubled coords)"""
-    return p[0] % 2 == 0 and p[1] % 2 == 0
-
-def l1_halve_point(p):
-    """Returns <p> with halved coordinates. If <p> is not a double point, None.
-    Input: <p> point
-    Output: point (if <p> double), None (otherwise)"""
-    if l1_is_double_point(p):
-        return ( p[0] //2, p[1] // 2)
-    else:
-        return None
-
-def l1_find_bad_double_circles(p1, p2, grid_size):
-    """Returns a list of pairs [center, radius]. These are circles that
-    contain p1, p2, with centers in grid_size. <center>, <radius> are integers.
-    Input: <p1>, <p2> (points, only works as intended with DOUBLE points,
-                       otherwise it misses circles.)
-           <grid_size>
-    Output: List of [center, radius], where center,radius are integers. """
-    if p1[0] > p2[0]:
-        p1, p2 = p2, p1
-    # Can assume p1[0] <= p2[0]
-    bad_circles = []
-    if abs( p1[0] - p2[0] ) == abs( p1[1] - p2[1] ):
-        return []# this shouldn't happen
-    elif abs( p1[1] - p2[1] ) > abs( p1[0] - p2[0] ):
-        if p1[1] > p2[1]:
-            left_center = (p1[0], (p1[1] + p2[1] + p1[0] - p2[0])//2 )
-            right_center = (p2[0], (p1[1] + p2[1] - p1[0] + p2[0])//2 )
-        else:# p2[1] >= p1[1]
-            left_center = (p1[0], (p1[1] + p2[1] - p1[0] + p2[0])//2 )
-            right_center = (p2[0], (p1[1] + p2[1] + p1[0] - p2[0])//2 )
-        # Without loss of generality, can assume centers are in grid.
-        # Without loss of generality, can assume centers are lattice pts.
-        # (Second assumption only works if points are double coords.)
-        while left_center[0] >= 0:
-            bad_circles.append( [left_center, dist(1, left_center, p1)] )
-            left_center = (left_center[0] - 1, left_center[1])
-        while right_center[0] <= grid_size:
-            bad_circles.append( [right_center, dist(1, right_center, p1)])
-            right_center = (right_center[0] + 1, right_center[1])
-    elif abs( p1[1] - p2[1] ) < abs( p1[0] - p2[0] ):
-        if p1[1] > p2[1]:
-            down_center   = ( (p1[0] + p2[0] - p1[1] + p2[1] )//2, p2[1])
-            up_center  = ( (p1[0] + p2[0] + p1[1] - p2[1] )//2, p1[1])
-        else:
-            down_center = ( (p1[0] + p2[0] - p1[1] + p2[1] )//2, p1[1])
-            up_center = ( (p1[0] + p2[0] + p1[1] - p2[1] )//2, p2[1])
-        while up_center[1] <= grid_size:
-            bad_circles.append( [up_center, dist(1, up_center, p1)])
-            up_center = (up_center[0], up_center[1] + 1)
-        while down_center[1] >= 0:
-            bad_circles.append( [ down_center, dist(1, down_center, p1)])
-            down_center = ( down_center[0], down_center[1] - 1)
-    return bad_circles
-
-def l1_forbidden_circle_points(p1, p2, p3, grid_size):
-    """Returns all points which lie on bad circles in a grid <grid_size>
-    Input: <p1>, <p2>, <p3> points
-           <grid_size>
-    Output: Set of points (which are verified to lie in grid)
+def init_sto(norm, grid_size, printStuff = False):
     """
-    plus_slope12 = l1_is_slope_plus1(p1, p2)
-    plus_slope13 = l1_is_slope_plus1(p1, p3)
-    plus_slope23 = l1_is_slope_plus1(p2, p3)
-    minus_slope12 = l1_is_slope_minus1(p1, p2)
-    minus_slope13 = l1_is_slope_minus1(p1, p3)
-    minus_slope23 = l1_is_slope_minus1(p2, p3)
-    # If not all 3 lie on a line, then there exist two points which are neither
-    # on +1 slope nor -1 slope. Reorder them to q1, q2, q3 so that q1, q2 are
-    # neither on +1 nor -1 slope.
-    if not plus_slope12 and not minus_slope12:
-        q1, q2, q3 = p1, p2, p3
-    elif not plus_slope13 and not minus_slope13:
-        q1, q2, q3 = p1, p3, p2
-    elif not plus_slope23 and not minus_slope23:
-        q1, q2, q3 = p2, p3, p1
-    else:
-        # This only happens if they lie on a line, which shouldn't happen.
-        return set()
-    # Compute two arcs up/right down/left determined by q1, q2. These arcs
-    # contain all of the points in circles made by q1, q2.
-    d1, d2, d3 = l1_double_point(q1), l1_double_point(q2), l1_double_point(q3)
-    bad_circles = l1_find_bad_double_circles(d1, d2, grid_size*2)
-    # If p3 in each circle, then forbid those points.
-    forbidden_points = set()
-    for circle in bad_circles:
-        if dist(1, d3, circle[0]) == circle[1]:
-            doubled_circle_points = ball_points(1, circle[0], circle[1], grid_size*2 )
-            for p in doubled_circle_points:
-                if l1_is_double_point(p):
-                    forbidden_points.add(l1_halve_point(p))
-    return forbidden_points
-
-def l1_ball_points(center, radius, grid_size):
-    """Returns set of points lying on the ball with <center>, <radius> on
-    <grid_size>
-    Input: <center> point, integer coordinates
-           <radius>, integer
-           <grid_size>
-    Output: set of points """
-    ball_pts = set()
-    bottom = ( center[0] , center[1] - radius )
-    right = ( center[0] + radius, center[1]  )
-    top = ( center[0] , center[1] + radius )
-    left = ( center[0] - radius, center[1]  )
-    p1,p2,p3,p4 = bottom, right, top, left
-    for i in range(radius):
-        for p in [p1,p2,p3,p4]:
-            if in_grid(p, grid_size):
-                ball_pts.add(p)
-        # Increment p1, p2, p3, p4
-        p1 = (p1[0] + 1, p1[1] + 1)
-        p2 = (p2[0] - 1, p2[1] + 1)
-        p3 = (p3[0] - 1, p3[1] - 1)
-        p4 = (p4[0] + 1, p4[1] - 1)
-    return ball_pts
-
-#####################################################
-#####################################################
-######      Methods used in Linfty  #################
-#####################################################
-#####################################################
-
-def linfty_dist(p1, p2):
-    '''Computes linfty distance between p1 and p2.
-    Input: p1, p2 points
-    Output: distance'''
-    return max( abs(p1[0] - p2[0]), abs(p1[1] - p2[1] ) )
-
-def linfty_reflect_pt(p):
-    """Returns reflected point <p>, about the line y = x
-    Input: <p> point
-    Output: reflected point (about y = x)"""
-    return ( p[1], p[0] )
-
-
-def linfty_reorder_points(p1, p2, p3):
-    """Returns the points p1, p2, p3, reordered and reflected.
-    If there is shared coord pair: Set q1, q2 to be equal in the y coord, and
-    q1[0] < q2[0].
-    Input: <p1>, <p2>, <p3> points
-    Output: [q1, q2, q3, isReflected] where
-            q1, q2, q3 is p1, p2, p3 reordered
-            isReflected is True / False, whether p1, p2, p3 were reflected """
-    if p1 == p2 or p2 == p3 or p1 == p3:
-        raise ValueError
-    for p,q,r in [(p1,p2,p3), (p1,p3,p2), (p2,p3,p1) ]:
-        if p[1] == q[1]:
-            if p[0] < q[0]:
-                return [p, q, r, False]
-            else:
-                return [q, p, r, False]
-        if p[0] == q[0]:
-            q1 = linfty_reflect_pt(p)
-            q2 = linfty_reflect_pt(q)
-            q3 = linfty_reflect_pt(r)
-            if q1[0] < q2[0]:
-                return [q1, q2, q3, True]
-            else:
-                return [q2, q1, q3, True]
-    # Otherwise, they do not share any coordinate. Order such that max distance is
-    # determined by q1 q2 and in the y coord.
-    square_diameter = 0
-    for p, q, r in [(p1,p2,p3), (p1,p3,p2), (p2,p3,p1) ]:
-        if abs( p[1] - q[1] ) > square_diameter:
-            isReflected = False
-            square_diameter = abs( p[1] - q[1] )
-            if q[1] > p[1]:
-                q1, q2, q3 = p, q, r
-            else:
-                q1, q2, q3 = q, p, r
-        if abs( p[0] - q[0] ) > square_diameter:
-            isReflected = True
-            square_diameter = abs( p[0] - q[0] )
-            if q[0] > p[0]:
-                q1, q2, q3 = linfty_reflect_pt(p), linfty_reflect_pt(q), linfty_reflect_pt(r)
-            else:
-                q1, q2, q3 = linfty_reflect_pt(q), linfty_reflect_pt(p), linfty_reflect_pt(r)
-    # Now q1, q2, q3 is the arrangement of p,q,r (possibly reflected) such that
-    # max distance is determined by q1 q2 and mesaured in y coord. Also q2 is above q1.
-    return [q1, q2, q3, isReflected]
-
-def linfty_find_bad_circles(p1, p2, p3, grid_size):
-    """Returns all bad circles that lie on a circle wih <p1>, <p2>, <p3>
-    Input: <p1>, <p2>, <p3> points, <grid_size>
-    Output: a list of things of the form [ (center), diameter]
-            and also <isReflected>, whether we computed this reflected."""
-    if p1 == p2 or p2 == p3 or p1 == p3:
-        raise ValueError
-    # First reorder.
-    q1, q2, q3, isReflected = linfty_reorder_points(p1, p2, p3)
-    bad_circles = []
-    if q1[1] != q2[1]:
-        # Since we reordered, they do not share any coordinate.
-        square_diameter = q2[1] - q1[1]
-        if q3[0] < q1[0]:
-            bottom_left = ( q3[0], q1[1] )
-            bad_circles.append( [bottom_left, square_diameter] )
-        elif q3[0] == q1[0] or q3[0] == q2[0]:
-            raise ValueError # this shouldn't happen
-        elif q3[0] > q1[0] and q3[0] < q2[0]:
-            # No circle. bad_circles stays empty
-            pass
-        elif q3[0] > q2[0]:
-            bottom_left = ( q3[0] - square_diameter , q2[1] - square_diameter)
-            bad_circles.append ( [bottom_left, square_diameter] )
-    else:
-        # q1[1] = q2[1], q1[0] < q2[0]
-        if q3[1] == q1[1]:
-            raise ValueError
-            # this shouldn't happen
-        if q1[0] < q3[0] and q3[0] < q2[0]:
-            if q2[0] - q1[0] > abs( q1[1] - q3[1] ):
-                #Fixed diameter, one circle.
-                square_diameter = q2[0] - q1[0]
-                if q3[1] < q1[1]:
-                    bottom_left = ( q1[0], q3[1])
-                else:
-                    top_left = (q1[0], q3[1])
-                    bottom_left = ( top_left[0], top_left[1] - square_diameter)
-                bad_circles.append( [ bottom_left, square_diameter] )
-            else:
-                #Fixed diameter, many circles (can be "shifted")
-                square_diameter = abs( q1[1] - q3[1] )
-                left_x = [i for i in range(q2[0] - square_diameter, q1[0] + 1)]
-                if q3[1] < q1[1]:
-                    bottom_y = q3[1]
-                else:
-                    bottom_y = q1[1]
-                bad_circles.extend( [[(i, bottom_y), square_diameter] for i in left_x ] )
-        else:# q1[0] >= q3[0] or q2[0] <= q3[0], q3 on "outside" of segment
-            # Points define a "corner", can make lots of circles.
-            if q3[0] <= q1[0] and q3[1] > q1[1]:
-                min_square_diameter = max( q2[0] - q3[0], q3[1] - q1[1])
-                bottom_left = (q3[0], q1[1])
-                bad_circles = [ [bottom_left, d]
-                                for d in range(min_square_diameter, grid_size + 1) ]
-            elif q3[0] <= q1[0] and q3[1] < q1[1]:
-                min_square_diameter = max( q2[0] - q3[0], q1[1] - q3[1])
-                top_left = (q3[0], q1[1])
-                bad_circles = [ [(top_left[0], top_left[1] - d), d]
-                                for d in range(min_square_diameter, grid_size + 1) ]
-            elif q3[0] >= q2[0] and q3[1] > q1[1]:
-                min_square_diameter = max( q3[0] - q1[0], q3[1] - q1[1])
-                bottom_right = (q3[0], q1[1])
-                bad_circles = [ [(bottom_right[0] - d, bottom_right[1]), d]
-                                for d in range(min_square_diameter, grid_size + 1)]
-            elif q3[0] >= q2[0] and q3[1] < q1[1]:
-                min_square_diameter = max( q3[0] - q1[0], q1[1] - q3[1])
-                top_right = (q3[0], q1[1])
-                bad_circles = [ [(top_right[0] - d, top_right[1] - d), d]
-                                for d in range(min_square_diameter, grid_size + 1)]
-            # Points define a corner, but abs( q3[1] - q1[1] ) > q2[0] - q1[0]
-            # so we can also slide
-            if abs(q1[1] - q3[1]) > max( abs(q1[0] - q3[0]), abs(q2[0] - q3[0])):
-                square_diameter = abs(q1[1] - q3[1])
-                if q3[0] <= q1[0]:
-                    left_x = [i for i in range(q3[0], q2[0] - square_diameter + 1) ]
-                    if q3[1] >= q1[1]:
-                        bottom_y = q1[1]
-                    else:
-                        bottom_y = q3[1]
-                    bad_circles.extend( [ [(i, bottom_y), square_diameter] for i in left_x])
-                else:
-                    left_x = [i for i in range(q3[0] - square_diameter, q1[0] + 1)]
-                    if q3[1] >= q1[1]:
-                        bottom_y = q1[1]
-                    else:
-                        bottom_y = q3[1]
-                    bad_circles.extend( [ [(i,bottom_y), square_diameter] for i in left_x ] )
-    return [bad_circles, isReflected]
-
-def linfty_forbidden_circle_points(p1, p2, p3, grid_size):
-    """Returns all points which lie on bad_circles in a grid <grid_size>
-    Input: p1, p2, p3 points
-           grid_size
-    Output: Set of points (which are verified to lie in grid)
+    Input:  <norm> 1 if L1, 0 if Linfty
+            <grid_size>
+            <printStuff>, whether to print time, which step we are doing, etc
+    Output: <sto_values>, which is a list of three things:
+                <sto_forbidden_line_points>, dict, key (a1,a2,b1,b2), value
+                                    set of points which lie on line with a,b
+                <sto_forbidden_circle_points>, dict, key (a1,a2,b1,b2,c1,c2),
+                                    value set of point on circle with a,b,c
+                <sto_is_line_like>, set, set of all (a1,a2,b1,b2,c1,c2,d1,d2)
+                                    which are line-like
     """
-    bad_circles, isReflected = linfty_find_bad_circles(p1, p2, p3, grid_size)
-    forbidden_pts = set()
-    for circle in bad_circles:
-        # Undo reflection.
-        if isReflected:
-            bottom_left = ( circle[0][1], circle[0][0] )
+    start_time = time.time()
+    if printStuff:
+        if norm == 1:
+            printable_norm = "L1"
+        elif norm == 0:
+            printable_norm = "Linfty"
+        print("Precomputing for", grid_size, " x ", grid_size, " grid in", printable_norm, sep='')
+    # Compute grid
+    grid = [ (i,j) for i in range(grid_size + 1) for j in range(grid_size + 1) ]
+    # Lines
+    sto_forbidden_line_points = dict()
+    if printStuff:
+        print("Precomputing lines...")
+    for a,b in itertools.combinations(grid, 2):
+        sto_forbidden_line_points[a+b] = simple_methods.forbidden_line_points(a, b, grid_size)
+        sto_forbidden_line_points[b+a] = sto_forbidden_line_points[a+b]
+    if printStuff:
+        print("DONE in",time.time() - start_time)
+    start_time = time.time()
+    # Circles
+    sto_forbidden_circle_points = dict()
+    if printStuff:
+        print("Precomputing circles...")
+    for a,b,c in itertools.combinations(grid, 3):
+        if is_line(a,b,c):
+            bad_points = set()
         else:
-            bottom_left = circle[0]
-        # Compute circles.
-        diam = circle[1]
-        bottom_right = (bottom_left[0] + diam, bottom_left[1])
-        top_left = (bottom_left[0], bottom_left[1] + diam)
-        top_right = (bottom_left[0] + diam, bottom_left[1] + diam)
-        p1,p2,p3,p4 = bottom_left, bottom_right, top_right, top_left
-        for i in range(diam):
-            for p in [p1,p2,p3,p4]:
-                if in_grid(p, grid_size):
-                    forbidden_pts.add(p)
-            # Increment p1,p2,p3,p4
-            p1 = (p1[0] + 1, p1[1])
-            p2 = (p2[0], p2[1] + 1)
-            p3 = (p3[0] - 1, p3[1])
-            p4 = (p4[0], p4[1] - 1)
-    return forbidden_pts
-
-def linfty_ball_points(center, radius, grid_size):
-    """Returns set of points lying on the ball with <center>, <radius> on
-        <grid_size>
-    Input: center, point with integer coordinates
-           radius, integer
-           grid_size
-    Output: set of points """
-    ball_pts = set()
-    bottom_left = ( center[0] - radius, center[1] - radius )
-    bottom_right = ( center[0] + radius, center[1] - radius )
-    top_right = ( center[0] + radius, center[1] + radius )
-    top_left = ( center[0] - radius, center[1] + radius )
-    p1,p2,p3,p4 = bottom_left, bottom_right, top_right, top_left
-    for i in range(2*radius):
-        for p in [p1,p2,p3,p4]:
-            if in_grid(p, grid_size):
-                ball_pts.add(p)
-        # Increment p1, p2, p3, p4
-        p1 = (p1[0] + 1, p1[1])
-        p2 = (p2[0], p2[1] + 1)
-        p3 = (p3[0] - 1, p3[1])
-        p4 = (p4[0], p4[1] - 1)
-    return ball_pts
-
-#####################################################
-#####################################################
-######      Splitter functions ######################
-#####################################################
-#####################################################
-
-def forbidden_circle_points(norm, p1, p2, p3, grid_size):
-    if norm == 1:
-        return l1_forbidden_circle_points(p1, p2, p3, grid_size)
-    elif norm == 0:
-        return linfty_forbidden_circle_points(p1, p2, p3, grid_size)
-    else:
-        return set()
-
-def ball_points(norm, center, radius, grid_size):
-    if norm == 1:
-        return l1_ball_points(center, radius, grid_size)
-    elif norm == 0:
-        return linfty_ball_points(center, radius, grid_size)
-    else:
-        return set()
-
-def dist(norm, a, b):
-    if norm == 1:
-        return l1_dist(a,b)
-    elif norm == 0:
-        return linfty_dist(a,b)
+            bad_points = forbidden_circle_points(norm, a, b, c, grid_size)
+        for p1, p2, p3 in itertools.permutations([a,b,c], 3):
+            sto_forbidden_circle_points[p1+p2+p3] = bad_points
+    if printStuff:
+        print("DONE in", time.time() - start_time)
+    start_time = time.time()
+    print( sto_forbidden_circle_points[0,0,0,1,2,1] )
+    # Line-like configs
+    sto_is_line_like = set()
+    if printStuff:
+        print("Precomputing line-like configs...")
+    for a,b,c,d in itertools.combinations(grid, 4):
+        if is_line_like(norm,a,b,c,d):
+            for p1, p2, p3, p4 in itertools.permutations([a,b,c,d], 4):
+                sto_is_line_like.add(p1+p2+p3+p4)
+    if printStuff:
+        print("DONE in", time.time() - start_time)
+    print( sto_forbidden_circle_points[0,0,0,1,2,1] )
+    return [sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like]
 
 #####################################################
 #####################################################
@@ -644,27 +384,51 @@ def dist(norm, a, b):
 #####################################################
 #####################################################
 
+def print_usage(args):
+    print("Usage: python3 "+args[0]+" <norm>"+" <crescent_size>"+" <grid_size>")
+    print("norms: l1, linfty")
+    print("\t l1: L1 (taxicab metric).")
+    print("\t linfty: Linfty (sup metric).")
+    print("crescent_size: Size of crescent set being searched for.")
+    print("grid_size: Searches grid from (0,0) to (grid_size, grid_size)")
+
 if __name__ == "__main__":
-    print_usage = False
     if len(sys.argv) <= 3:
-        print_usage = True
+        print_usage(sys.argv)
     elif len(sys.argv) >= 4:
         mode = sys.argv[1]
         try:
             crescent_size = int(sys.argv[2])
             grid_size = int(sys.argv[3])
         except ValueError:
-            print_usage = True
+            print_usage(sys.argv)
+        # Detect norm.
+        norm = None
         if mode == "l1":
-            find_crescent_set( 1, crescent_size, grid_size)
+            norm = 1
         elif mode == "linfty":
-            find_crescent_set( 0, crescent_size, grid_size )
+            norm = 0
+        # If norm valid, run.
+        if norm == None:
+            print_usage(sys.argv)
         else:
-            print_usage = True
-    if print_usage:
-        print("Usage: python3 "+sys.argv[0]+" <norm>"+" <crescent_size>"+" <grid_size>")
-        print("norms: l1, linfty")
-        print("\t l1: L1 (taxicab metric).")
-        print("\t linfty: Linfty (sup metric).")
-        print("crescent_size: Size of crescent set being searched for.")
-        print("grid_size: Searches grid from (0,0) to (grid_size, grid_size)")
+            sto_values = []
+            # sto_values = init_sto(norm, grid_size, True)
+            # print( sto_values[1][0,0,0,1,2,1] )
+            # print( sto_values[1][0,1,0,0,2,1] )
+            # print( sto_values[1][0,1,2,1,0,0] )
+            # print()
+            # for i in sto_values[1]:
+            #     a = ( i[0], i[1] )
+            #     b = (i[2], i[3] )
+            #     c = (i[4], i[5])
+            #     if a != b and a != c and b != c and not is_line(a,b,c):
+            #             if sto_values[1][i] != forbidden_circle_points(norm, a, b, c, grid_size ):
+            #                 print(i)
+            #                 print( sto_values[1][i] )
+            #                 print(a, b, c)
+            #                 print("stored", sto_values[1][i] );
+            #                 print("real",forbidden_circle_points(norm, a, b, c, grid_size ))
+            #                 print()
+            #                 input()
+            find_crescent_set( norm, crescent_size, grid_size, sto_values)
