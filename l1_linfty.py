@@ -1,6 +1,6 @@
 # l1_infty.py
 # Sara Fish
-# Jul 31 2019 - Aug 15 2019
+# Jul 31 2019 - Aug 21 2019
 
 # Description: This code finds crescent configurations in L1 and Linfty.
 # Algorithm: backtracking.
@@ -8,6 +8,11 @@
 # configurations in Linfty of size n for 4 <= n <= 8 and in L1 of size n for
 # 4 <= n <= 7. This is reasonable because we conjecture that they do not exist
 # in Linfty for n >= 9 and in L1 for n >= 8.
+
+# 8/21/2019 NOTE: This version of the code works but it is not polished.
+# The code works -- all broken code is commented out and replaced by
+# slow code which works. Places where the code needs to be worked on (in
+# this file -- the other files seem fine) are marked with TODO.
 
 # Standard libraries
 #############################################
@@ -84,35 +89,55 @@ def has_crescent_dist(norm, points):
     distances = distance_set(norm, points)
     return set(distances.values()) == set(range(1,n))
 
-def forbidden_linelike_points(norm, p1, p2, p3, grid_size):
-    """Returns set of points p in the grid <grid_size> which are forbidden
-    because p, p1, p2, p3 (in any order) form a line-like configuration.
-    Input: <norm>, 1 if L1, 0 if Linfty
-           <p1>, <p2>, <p3> points
-           <grid_size>
-    Output: set of points """
-    # Reorder p1, p2, p3 into q1, q2, q3 so that dist(q1, q2) = dist(q2, q3).
-    if dist(norm, p1, p2) == dist(norm, p2, p3):
-        q1, q2, q3 = p1, p2, p3
-    elif dist(norm, p1, p2) == dist(norm, p1, p3):
-        q1, q2, q3 = p2, p1, p3
-    elif dist(norm, p1, p3) == dist(norm, p2, p3):
-        q1, q2, q3 = p1, p3, p2
-    else:
-        return set()# p1, p2, p3 are not line-like, because they have no
-                    # repeated distance
-    # Otherwise, q1, q2, q3 are line-like and dist(q1, q2) = dist(q2, q3).
-    forbidden_pts = set()
-    for p,q,r in [(q1,q2,q3), (q3,q2,q1)]:
-        # We are trying to add a fourth point s to make p q r s line-like.
-        first_order = ball_points(norm, r, dist(p, q), grid_size)
-        second_order = ball_points(norm, q, dist(p,r), grid_size)
-        both = first_order.intersection(second_order)
-        forbidden_pts = forbidden_pts.union(both)
-    return forbidden_pts
+# TODO I never use this function -- either use it or delete it.
+# def forbidden_linelike_points(norm, p1, p2, p3, grid_size):
+#     """Returns set of points p in the grid <grid_size> which are forbidden
+#     because p, p1, p2, p3 (in any order) form a line-like configuration.
+#     Input: <norm>, 1 if L1, 0 if Linfty
+#            <p1>, <p2>, <p3> points
+#            <grid_size>
+#     Output: set of points """
+#     # Reorder p1, p2, p3 into q1, q2, q3 so that dist(q1, q2) = dist(q2, q3).
+#     if dist(norm, p1, p2) == dist(norm, p2, p3):
+#         q1, q2, q3 = p1, p2, p3
+#     elif dist(norm, p1, p2) == dist(norm, p1, p3):
+#         q1, q2, q3 = p2, p1, p3
+#     elif dist(norm, p1, p3) == dist(norm, p2, p3):
+#         q1, q2, q3 = p1, p3, p2
+#     else:
+#         return set()# p1, p2, p3 are not line-like, because they have no
+#                     # repeated distance
+#     # Otherwise, q1, q2, q3 are line-like and dist(q1, q2) = dist(q2, q3).
+#     forbidden_pts = set()
+#     for p,q,r in [(q1,q2,q3), (q3,q2,q1)]:
+#         # We are trying to add a fourth point s to make p q r s line-like.
+#         first_order = ball_points(norm, r, dist(p, q), grid_size)
+#         second_order = ball_points(norm, q, dist(p,r), grid_size)
+#         both = first_order.intersection(second_order)
+#         forbidden_pts = forbidden_pts.union(both)
+#     return forbidden_pts
 
+def is_general(norm, points, grid_size, sto_forbidden_line_points,
+            sto_forbidden_circle_points, sto_is_line_like, speed, printFail = False):
+    """ Splitter function for is_general, based on speed. """
+    # TODO use this for debugging, when done comment out
+    # fast = is_general_fast(norm, points, grid_size, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like, False)
+    # slow = is_general_slow(norm, points, grid_size, False)
+    # if slow != fast:
+    #     print(points)
+    #     print("Fast: ",fast)
+    #     is_general_fast(norm, points, grid_size, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like, True)
+    #     print("Slow: ",slow)
+    #     is_general_slow(norm, points, grid_size, True)
+    #     print()
+    #     return is_general_slow(norm, points, grid_size, False)
+    # Actual function
+    if speed == "fast":
+        return is_general_fast(norm, points, grid_size, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like, printFail)
+    elif speed == "slow":
+        return is_general_slow(norm, points, grid_size, printFail)
 
-def is_general(norm, points, printFail = False):
+def is_general_slow(norm, points, grid_size, printFail = False):
     """ Determines whether a set of points is in general position.
     (This means: no lines, balls, or line-like configs of size 4.)
     Input: <norm>: 1 for L1, 0 for Linfty
@@ -120,16 +145,13 @@ def is_general(norm, points, printFail = False):
            <printFail>: print the reason it's not in general position if false
                         (default False)
     Output: True / False (whether in general position)"""
-    # Find grid size.
-    grid_size = 0
-    for p in points:
-        grid_size = max( grid_size, p[0], p[1] )
+    # grid_size = simple_methods.find_grid_size(points)
     # Check no 3 points on a line.
     for p,q in itertools.combinations(points, 2):
-        bad_line_pts = simple_methods.forbidden_line_points(p,q,grid_size)
+        bad_line_pts = simple_methods.forbidden_line_points(p, q, grid_size)
         if len( bad_line_pts.intersection(points) ) >= 3:
             if printFail:
-                print("Line found: ",p,q,bad_line_pts.intersection(points))
+                print("Line found: ", p, q, bad_line_pts.intersection(points))
             return False
     # Check no 4 points on a circle.
     for p,q,r in itertools.combinations(points, 3):
@@ -147,73 +169,84 @@ def is_general(norm, points, printFail = False):
     # Otherwise, is in general position.
     return True
 
-# def is_general_fast(points, sto_forbidden_line_points,
-#             sto_forbidden_circle_points, sto_is_line_like, printFail = False):
-#     """ Determines whether a set of points is in general position.
-#     WARNING: (these lists) have to be precomputed
-#     WARNING: assumes points[:-1] is in general position, only checks last pt
-#     Input: <points>, list of points
-#            <sto_forbidden_line_points>, dict, key (a1,a2,b1,b2), value
-#                                         set of points which lie on line with a,b
-#            <sto_forbidden_circle_points>, dict, key (a1,a2,b1,b2,c1,c2), value
-#                                         set of point on circle with a,b,c
-#            <sto_is_line_like>, set, set of all (a1,a2,b1,b2,c1,c2,d1,d2) which
-#                                     are line-like
-#            <printFail>: print the reason it's not in general position, if it
-#                         isn't. (e.g. line, circle, linelike)
-#     Output: True/False (and printing if <printFail> is True)
-#     """
-#     # No 3 points on a line
-#     for p,q,r in itertools.combinations(points, 3):
-#         if r in sto_forbidden_line_points[p + q]:
-#             if printFail:
-#                 print("Line found: ", p, q, r)
-#             return False
-#     # No 4 points on circle
-#     for p,q,r,s in itertools.combinations(points, 4):
-#         if s in sto_forbidden_circle_points[p + q + r]:
-#             if printFail:
-#                 print("Circle found: ", p, q, r, s)
-#             return False
-#     # No 4 points in line-like
-#     for p,q,r,s in itertools.combinations(points, 4):
-#         if p+q+r+s in sto_is_line_like:
-#             if printFail:
-#                 print("Line-like found: ",p, q, r, s)
-#             return False
-#     return True
-#     # last = points[-1]
-#     # # Check no 3 points on a line.
-#     # for p,q in itertools.combinations(points, 2):
-#     #     bad_line_pts = sto_forbidden_line_points[p + q]
-#     #     if last in bad_line_pts and last != p and last != q:
-#     #         if printFail:
-#     #             print("Line found: ",p,q,last)
-#     #         return False
-#     # # Check no 4 points on a circle.
-#     # for p,q,r in itertools.combinations(points, 3):
-#     #     bad_circle_pts = sto_forbidden_circle_points[p + q + r]
-#     #     if last in bad_circle_pts and last != p and last != q and last != r:
-#     #         if printFail:
-#     #             print("Circle found: ",p,q,r,last)
-#     #         return False
-#     # # Check if has a line like configuration of size 4.
-#     # for p,q,r in itertools.combinations(points, 3):
-#     #     if p+q+r+last in sto_is_line_like:
-#     #         if printFail:
-#     #             print("Has line-like:",p,q,r,last)
-#     #         return False
-#     # Otherwise, is in general position.
-#     return True
+def is_general_fast(norm, points, grid_size, sto_forbidden_line_points,
+            sto_forbidden_circle_points, sto_is_line_like, printFail = False):
+    """ Determines whether a set of points is in general position.
+    WARNING: (these lists) have to be precomputed
+    WARNING: assumes points[:-1] is in general position, only checks last pt
+    Input: <norm>, 1 if L1, 0 if Linfty
+           <points>, list of points
+           <sto_forbidden_line_points>, dict, key (a1,a2,b1,b2), value
+                                        set of points which lie on line with a,b
+           <sto_forbidden_circle_points>, dict, key (a1,a2,b1,b2,c1,c2), value
+                                        set of point on circle with a,b,c
+           <sto_is_line_like>, set, set of all (a1,a2,b1,b2,c1,c2,d1,d2) which
+                                    are line-like
+           <printFail>: print the reason it's not in general position, if it
+                        isn't. (e.g. line, circle, linelike)
+    Output: True/False (and printing if <printFail> is True)
+    """
+    # grid_size = simple_methods.find_grid_size(points)
+    # No 3 points on a line
+    for p,q,r in itertools.combinations(points, 3):
+        if r in sto_forbidden_line_points[p + q]:
+            if printFail:
+                print("Line found: ", p, q, r)
+            return False
+    # No 4 points on circle
+    # TODO: Fast (and incorrect) circle code, fix this.
+    # for p,q,r,s in itertools.combinations(points, 4):
+    #     if s in sto_forbidden_circle_points[p + q + r]:
+    #         if printFail:
+    #             print("Circle found: ", p, q, r, s, sto_forbidden_circle_points[p + q + r])
+    #         return False
+    # Slow (and correct) circle code:
+    for p,q,r in itertools.combinations(points, 3):
+        bad_circle_pts = forbidden_circle_points(norm,  p,q,r, grid_size)
+        if len( bad_circle_pts.intersection(points) ) >= 4:
+            if printFail:
+                print("Circle found: ",p,q,r,bad_circle_pts.intersection(points))
+            return False
+    # No 4 points in line-like
+    for p,q,r,s in itertools.combinations(points, 4):
+        if p+q+r+s in sto_is_line_like:
+            if printFail:
+                print("Line-like found: ",p, q, r, s)
+            return False
+    return True
+    # TODO This is faster but has a bug, fix this later.
+    # last = points[-1]
+    # # Check no 3 points on a line.
+    # for p,q in itertools.combinations(points, 2):
+    #     bad_line_pts = sto_forbidden_line_points[p + q]
+    #     if last in bad_line_pts and last != p and last != q:
+    #         if printFail:
+    #             print("Line found: ",p,q,last)
+    #         return False
+    # # Check no 4 points on a circle.
+    # for p,q,r in itertools.combinations(points, 3):
+    #     bad_circle_pts = sto_forbidden_circle_points[p + q + r]
+    #     if last in bad_circle_pts and last != p and last != q and last != r:
+    #         if printFail:
+    #             print("Circle found: ",p,q,r,last)
+    #         return False
+    # # Check if has a line like configuration of size 4.
+    # for p,q,r in itertools.combinations(points, 3):
+    #     if p+q+r+last in sto_is_line_like:
+    #         if printFail:
+    #             print("Has line-like:",p,q,r,last)
+    #         return False
+    # Otherwise, is in general position.
+    return True
 
 
-def is_crescent(norm, points, printFail = False):
+def is_crescent(norm, points, grid_size, printFail = False):
     """ Determines whether a set of points is crescent.
     Crescent means: in general position, and has "crescent" distance set.
     Input: <norm>, 1 if L1, 0 if Linfty
            <points>, set of points
     Output: True / False """
-    if not is_general(norm, points, printFail):
+    if not is_general_slow(norm, points, grid_size, printFail):
         return False
     if not has_crescent_dist(norm, points):
         if printFail:
@@ -233,7 +266,8 @@ def is_line_like(norm, p1, p2, p3, p4):
             if (dist(norm, pts[perm[0]], pts[perm[1]]) == dist(norm, pts[perm[1]], pts[perm[2]])
                 and dist(norm, pts[perm[1]], pts[perm[2]]) == dist(norm, pts[perm[2]], pts[perm[3]])
                 and dist(norm, pts[perm[0]], pts[perm[2]]) == dist(norm, pts[perm[1]], pts[perm[3]]) ):
-                return [pts[perm[i]] for i in range(4)]
+                return True# [pts[perm[i]] for i in range(4)]
+    return False
 
 
 def has_line_like(norm, points):
@@ -247,7 +281,7 @@ def has_line_like(norm, points):
     return False
 
 
-def find_crescent_set(norm, crescent_size, grid_size, sto_values):
+def find_crescent_set(norm, crescent_size, grid_size, sto_values, speed="slow"):
     """ Finds a crescent set of size <crescent_size> in <grid_size>.
     Input: <norm>, 1 if L1, 0 if Linfty
            <crescent_size>, size of crescent set.
@@ -259,9 +293,11 @@ def find_crescent_set(norm, crescent_size, grid_size, sto_values):
                                     value set of point on circle with a,b,c
                 <sto_is_line_like>, set, set of all (a1,a2,b1,b2,c1,c2,d1,d2)
                                     which are line-like
+           <speed>, slow or fast. Default slow. Slow computes each is_general
+                    from scratch, fast uses precomputed stuff. Fast has bugs
     Output: Set of points (crescent set), or None if none exists.
     """
-    # sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like = sto_values
+    sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like = sto_values
     count = 0
     start = time.time()
     current_set = []
@@ -272,27 +308,13 @@ def find_crescent_set(norm, crescent_size, grid_size, sto_values):
             print(time.time() - start,current_set)
         current_set.append(next_to_add)
         needs_pop = False # whether last element needs to be popped
-
-        # #TODO
-        # aa = is_general(norm, current_set,False)
-        # bb = is_general_fast(current_set, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like,False)
-        # if aa != bb:
-        #     print(current_set)
-        #     print("good",aa)
-        #     is_general(norm, current_set,True)
-        #     print("fast",bb)
-        #     is_general_fast(current_set, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like,True)
-        #     print()
-
-
-
-        if not is_general(norm, current_set):
-        #if not is_general_fast(current_set, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like):
+        if not is_general(norm, current_set, grid_size, sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like, speed):
             needs_pop = True
         elif len( distance_set(norm, current_set) ) >= crescent_size:
             needs_pop = True
         elif len(current_set) >= crescent_size and has_crescent_dist(norm, current_set):
             print("Crescent found!", current_set)
+            print(is_crescent(norm, current_set, grid_size, True))
             return current_set
         elif len(current_set) >= crescent_size:
             needs_pop = True
@@ -352,19 +374,19 @@ def init_sto(norm, grid_size, printStuff = False):
     start_time = time.time()
     # Circles
     sto_forbidden_circle_points = dict()
-    if printStuff:
-        print("Precomputing circles...")
-    for a,b,c in itertools.combinations(grid, 3):
-        if is_line(a,b,c):
-            bad_points = set()
-        else:
-            bad_points = forbidden_circle_points(norm, a, b, c, grid_size)
-        for p1, p2, p3 in itertools.permutations([a,b,c], 3):
-            sto_forbidden_circle_points[p1+p2+p3] = bad_points
-    if printStuff:
-        print("DONE in", time.time() - start_time)
+    # TODO Uncomment this to precompute circles again.
+    # if printStuff:
+    #     print("Precomputing circles...")
+    # for a,b,c in itertools.combinations(grid, 3):
+    #     if simple_methods.is_line(a,b,c):
+    #         bad_points = set()
+    #     else:
+    #         bad_points = forbidden_circle_points(norm, a, b, c, grid_size).copy()
+    #     for p1, p2, p3 in itertools.permutations([a,b,c], 3):
+    #         sto_forbidden_circle_points[p1+p2+p3] = bad_points.copy()
+    # if printStuff:
+    #     print("DONE in", time.time() - start_time)
     start_time = time.time()
-    print( sto_forbidden_circle_points[0,0,0,1,2,1] )
     # Line-like configs
     sto_is_line_like = set()
     if printStuff:
@@ -375,7 +397,6 @@ def init_sto(norm, grid_size, printStuff = False):
                 sto_is_line_like.add(p1+p2+p3+p4)
     if printStuff:
         print("DONE in", time.time() - start_time)
-    print( sto_forbidden_circle_points[0,0,0,1,2,1] )
     return [sto_forbidden_line_points, sto_forbidden_circle_points, sto_is_line_like]
 
 #####################################################
@@ -386,49 +407,49 @@ def init_sto(norm, grid_size, printStuff = False):
 
 def print_usage(args):
     print("Usage: python3 "+args[0]+" <norm>"+" <crescent_size>"+" <grid_size>")
+    # TODO add back in <slow/fast> option
     print("norms: l1, linfty")
     print("\t l1: L1 (taxicab metric).")
     print("\t linfty: Linfty (sup metric).")
     print("crescent_size: Size of crescent set being searched for.")
     print("grid_size: Searches grid from (0,0) to (grid_size, grid_size)")
+    # print("speed: Fast is buggy. Default slow")
 
-if __name__ == "__main__":
+def do():
+    print(sys.argv)
     if len(sys.argv) <= 3:
-        print_usage(sys.argv)
+        return False
     elif len(sys.argv) >= 4:
         mode = sys.argv[1]
         try:
             crescent_size = int(sys.argv[2])
             grid_size = int(sys.argv[3])
         except ValueError:
-            print_usage(sys.argv)
+            return False
         # Detect norm.
-        norm = None
         if mode == "l1":
             norm = 1
         elif mode == "linfty":
             norm = 0
-        # If norm valid, run.
-        if norm == None:
-            print_usage(sys.argv)
         else:
-            sto_values = []
-            # sto_values = init_sto(norm, grid_size, True)
-            # print( sto_values[1][0,0,0,1,2,1] )
-            # print( sto_values[1][0,1,0,0,2,1] )
-            # print( sto_values[1][0,1,2,1,0,0] )
-            # print()
-            # for i in sto_values[1]:
-            #     a = ( i[0], i[1] )
-            #     b = (i[2], i[3] )
-            #     c = (i[4], i[5])
-            #     if a != b and a != c and b != c and not is_line(a,b,c):
-            #             if sto_values[1][i] != forbidden_circle_points(norm, a, b, c, grid_size ):
-            #                 print(i)
-            #                 print( sto_values[1][i] )
-            #                 print(a, b, c)
-            #                 print("stored", sto_values[1][i] );
-            #                 print("real",forbidden_circle_points(norm, a, b, c, grid_size ))
-            #                 print()
-            #                 input()
-            find_crescent_set( norm, crescent_size, grid_size, sto_values)
+            return False
+        # Detect speed.
+        speed = "fast" # for now, always run fast
+        # TODO Add back in slow/fast option
+        # if len(sys.argv) == 4:
+        #     speed = "slow"
+        # else:
+        #     speed = sys.argv[4]
+        #     if speed != "fast" and speed != "slow":
+        #         return False
+        # Norm and speed are good, so run computation.
+        sto_values = init_sto(norm, grid_size, True)
+        start_time = time.time()
+        find_crescent_set( norm, crescent_size, grid_size, sto_values, speed)
+        print("Crescent computation time: ",time.time() - start_time)
+        return True
+
+if __name__ == "__main__":
+    good_input = do()
+    if not good_input:
+        print_usage(sys.argv)

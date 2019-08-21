@@ -24,7 +24,7 @@ def is_line(p1, p2, p3):
     """Determines whether p1, p2, p3 lie on a line.
     Input: <p1>, <p2>, <p3> points
     Output: True if they lie on a line, False otherwise"""
-    return abs(p1[0] - p2[0]) * abs( p2[1] - p3[1] ) == abs(p1[1] - p2[1] ) * abs( p2[0] - p3[0] )
+    return (p1[0] - p2[0]) * ( p2[1] - p3[1] ) == (p1[1] - p2[1] ) * ( p2[0] - p3[0] )
 
 def in_grid(p, grid_size):
     """Determines whether point <p> is in the grid with size <grid_size>
@@ -71,3 +71,12 @@ def forbidden_line_points(p1, p2, grid_size):
     while in_grid( ( line_pts[-1][0] + step[0], line_pts[-1][1] + step[1] ), grid_size ):
         line_pts.append( ( line_pts[-1][0] + step[0], line_pts[-1][1] + step[1] ) )
     return set( line_pts )
+
+def find_grid_size(points):
+    """Finds grid size containing set of points
+    Input: <points>, list or set of points
+    Output: grid_size (integer)"""
+    grid_size = 0
+    for p in points:
+        grid_size = max( grid_size, p[0], p[1] )
+    return grid_size 
